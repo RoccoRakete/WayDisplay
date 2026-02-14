@@ -10,6 +10,9 @@ pub struct WayDisplay {
     pub adaptive_sync: bool,
     pub monitor_enabled: bool,
     pub cmd_output: Option<String>,
+    pub scaling: String,
+    pub monitor_count: i8,
+    pub is_multi_monitor: bool,
 
     #[serde(skip)]
     pub error_msg: Option<String>,
@@ -25,6 +28,9 @@ impl Default for WayDisplay {
             adaptive_sync: false,
             monitor_enabled: true,
             cmd_output: None,
+            scaling: "1.0".to_owned(),
+            monitor_count: 1,
+            is_multi_monitor: true,
         }
     }
 }

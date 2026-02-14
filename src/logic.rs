@@ -11,6 +11,14 @@ impl WayDisplay {
                 let json_string = String::from_utf8_lossy(&out.stdout);
                 match serde_json::from_str::<Vec<Monitor>>(&json_string) {
                     Ok(mut data) => {
+                        let monitor_count = data.len();
+                        if monitor_count > 1 {
+                            println!("Multi Monitor: {monitor_count}");
+                            self.is_multi_monitor = true;
+                        } else {
+                            println!("Single Monitor");
+                            self.is_multi_monitor = false;
+                        }
                         let scale = 80.0 / 1920.0;
                         for m in &mut data {
                             m.visual_pos = egui::pos2(m.x as f32 * scale, m.y as f32 * scale);
@@ -33,11 +41,14 @@ impl WayDisplay {
         let (Some(m_idx), Some(mode_idx)) = (self.selected_idx, self.selected_mode_idx) else {
             return;
         };
-        let Some(mode) = self.monitors.get(m_idx).and_then(|m| m.modes.get(mode_idx)) else {
+
+        let Some(monitor) = self.monitors.get(m_idx) else {
             return;
         };
 
-        let monitor = &self.monitors[m_idx];
+        let Some(mode) = monitor.modes.get(mode_idx) else {
+            return;
+        };
         let scale = mode.width as f32 / 80.0;
 
         // Find normalization point (top-left)
@@ -59,9 +70,15 @@ impl WayDisplay {
         cmd.arg("--output").arg(&monitor.name);
 
         if self.monitor_enabled {
+            cmd.arg("--on");
             cmd.arg("--custom-mode")
                 .arg(format!("{}x{}@{}", mode.width, mode.height, mode.refresh));
-            cmd.arg("--pos").arg(format!("{},{}", px, py));
+
+            if self.is_multi_monitor {
+                cmd.arg("--pos").arg(format!("{px},{py}"));
+            }
+
+            cmd.arg("--scale").arg(self.scaling.clone());
             cmd.arg("--adaptive-sync").arg(if self.adaptive_sync {
                 "enabled"
             } else {

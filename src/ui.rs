@@ -142,78 +142,98 @@ impl WayDisplay {
                         Layout::top_down(Align::Min),
                         |ui| {
                             ui.label("Settings:");
+                            ui.separator();
                             ui.checkbox(&mut self.monitor_enabled, "Enable Monitor");
                             ui.checkbox(&mut self.adaptive_sync, "Adaptive Sync");
-                            ui.separator();
-                            ui.label("Monitor Alignment:");
+                            ui.label("Scaling:");
+                            ui.text_edit_singleline(&mut self.scaling);
 
-                            // Alignment Canvas
-                            let (rect, _) = ui.allocate_at_least(
-                                vec2(ui.available_width(), 200.0),
-                                egui::Sense::hover(),
-                            );
-                            ui.painter()
-                                .rect_filled(rect, 3.0, ui.visuals().extreme_bg_color);
-                            let center = rect.center();
+                            if self.is_multi_monitor {
+                                // Alignment Canvas
+                                ui.separator();
+                                ui.label("Monitor Alignment:");
 
-                            for i in 0..self.monitors.len() {
-                                let preview_size = vec2(80.0, 45.0);
-                                let monitor_rect = egui::Rect::from_center_size(
-                                    center + self.monitors[i].visual_pos.to_vec2(),
-                                    preview_size,
+                                let (rect, _) = ui.allocate_at_least(
+                                    vec2(ui.available_width(), 200.0),
+                                    egui::Sense::hover(),
                                 );
+                                ui.painter()
+                                    .rect_filled(rect, 3.0, ui.visuals().extreme_bg_color);
+                                let center = rect.center();
 
-                                let id = ui.make_persistent_id(format!("mon_drag_{}", i));
-                                let res = ui.interact(monitor_rect, id, egui::Sense::drag());
+                                for i in 0..self.monitors.len() {
+                                    let preview_size = vec2(80.0, 45.0);
+                                    let monitor_rect = egui::Rect::from_center_size(
+                                        center
+                                            + self
+                                                .monitors
+                                                .get(i)
+                                                .expect("Monitor index out of bounds")
+                                                .visual_pos
+                                                .to_vec2(),
+                                        preview_size,
+                                    );
 
-                                if res.dragged() {
-                                    // 1. Move the monitor
-                                    self.monitors[i].visual_pos += res.drag_delta();
+                                    let id = ui.make_persistent_id(format!("mon_drag_{i}"));
+                                    let res = ui.interact(monitor_rect, id, egui::Sense::drag());
 
-                                    // 2. Define boundaries (The black box is 'rect')
-                                    let half_w = rect.width() / 2.0;
-                                    let half_h = rect.height() / 2.0;
-
-                                    // Margin (half of our 80x45 preview box)
-                                    let margin_x = 40.0;
-                                    let margin_y = 22.5;
-
-                                    // 3. Clamp visual_pos relative to the center of the box
-                                    self.monitors[i].visual_pos.x = self.monitors[i]
-                                        .visual_pos
-                                        .x
-                                        .clamp(-half_w + margin_x, half_w - margin_x);
-                                    self.monitors[i].visual_pos.y = self.monitors[i]
-                                        .visual_pos
-                                        .y
-                                        .clamp(-half_h + margin_y, half_h - margin_y);
-
-                                    let snap_dist = 10.0;
-                                    for j in 0..self.monitors.len() {
-                                        if i == j {
-                                            continue;
+                                    if res.dragged() {
+                                        // Move the monitor
+                                        if let Some(m) = self.monitors.get_mut(i) {
+                                            m.visual_pos += res.drag_delta();
                                         }
-                                        let other_pos = self.monitors[j].visual_pos;
-                                        if (self.monitors[i].visual_pos.x - (other_pos.x - 80.0))
-                                            .abs()
-                                            < snap_dist
-                                        {
-                                            self.monitors[i].visual_pos.x = other_pos.x - 80.0;
+
+                                        // Define boundaries
+                                        let half_w = rect.width() / 2.0;
+                                        let half_h = rect.height() / 2.0;
+
+                                        let margin_x = 40.0;
+                                        let margin_y = 22.5;
+
+                                        // Clamp visual_pos relative to the center of the box
+                                        for monitor in &mut self.monitors {
+                                            monitor.visual_pos.x = monitor
+                                                .visual_pos
+                                                .x
+                                                .clamp(-half_w + margin_x, half_w - margin_x);
+
+                                            monitor.visual_pos.y = monitor
+                                                .visual_pos
+                                                .y
+                                                .clamp(-half_h + margin_y, half_h - margin_y);
+                                        }
+                                        let snap_dist = 10.0;
+                                        for j in 0..self.monitors.len() {
+                                            if i == j {
+                                                continue;
+                                            }
+                                            if let Some(other_monitor) = self.monitors.get(j) {
+                                                let target_x = other_monitor.visual_pos.x - 80.0;
+
+                                                if let Some(monitor_i) =
+                                                    self.monitors.get_mut(i).filter(|m| {
+                                                        (m.visual_pos.x - target_x).abs()
+                                                            < snap_dist
+                                                    })
+                                                {
+                                                    monitor_i.visual_pos.x = target_x;
+                                                }
+                                            }
                                         }
                                     }
+                                    let color = if self.selected_idx == Some(i) {
+                                        ui.visuals().selection.bg_fill
+                                    } else {
+                                        ui.visuals().widgets.inactive.bg_fill
+                                    };
+                                    ui.painter().rect_filled(monitor_rect, 2.0, color);
+                                    ui.painter().rect_stroke(
+                                        monitor_rect,
+                                        2.0,
+                                        ui.visuals().widgets.active.fg_stroke,
+                                        egui::StrokeKind::Middle,
+                                    );
                                 }
-                                let color = if self.selected_idx == Some(i) {
-                                    ui.visuals().selection.bg_fill
-                                } else {
-                                    ui.visuals().widgets.inactive.bg_fill
-                                };
-                                ui.painter().rect_filled(monitor_rect, 2.0, color);
-                                ui.painter().rect_stroke(
-                                    monitor_rect,
-                                    2.0,
-                                    ui.visuals().widgets.active.fg_stroke,
-                                    egui::StrokeKind::Middle,
-                                );
                             }
                         },
                     );
@@ -235,6 +255,9 @@ impl WayDisplay {
                                     selected_mode.width, selected_mode.height
                                 ));
                                 ui.label(format!("Refresh: {:.2} Hz", selected_mode.refresh));
+                                ui.label(format!("Monitor enabled: {}", self.monitor_enabled));
+                                ui.label(format!("VRR: {}", self.adaptive_sync));
+                                ui.label(format!("Scaling: {}", self.scaling));
                                 ui.add_space(10.0);
 
                                 if ui.button(RichText::new("Apply").size(14.0)).clicked() {
@@ -243,13 +266,42 @@ impl WayDisplay {
                             }
 
                             if let Some(cmd_str) = &self.cmd_output {
-                                ui.add_space(5.0);
+                                ui.add_space(15.0);
                                 ui.separator();
                                 ui.label("wlr-randr Command:");
-                                ui.add(egui::Label::new(RichText::new(cmd_str).code()));
+                                ui.add_space(5.0);
+                                ui.add(egui::Label::new(egui::RichText::new(cmd_str).code()));
+                                ui.add_space(15.0);
 
-                                if ui.button("Copy Command").clicked() {
+                                let button_id = ui.make_persistent_id("copy_btn_time");
+                                let last_click_time: Option<f64> =
+                                    ui.data(|d| d.get_temp(button_id));
+                                let current_time = ui.input(|i| i.time);
+
+                                let is_recent =
+                                    last_click_time.is_some_and(|t| current_time - t < 1.0);
+
+                                let icon_text = if is_recent {
+                                    format!(
+                                        "{}  {}",
+                                        egui_phosphor::regular::CHECK,
+                                        "Copied to Clipboard!"
+                                    )
+                                } else {
+                                    format!(
+                                        "{}  {}",
+                                        egui_phosphor::regular::CLIPBOARD,
+                                        "Copy to Clipboard"
+                                    )
+                                };
+
+                                if ui.button(icon_text).clicked() {
                                     ui.ctx().copy_text(cmd_str.clone());
+                                    ui.data_mut(|d| d.insert_temp(button_id, current_time));
+                                }
+
+                                if is_recent {
+                                    ui.ctx().request_repaint();
                                 }
                             }
                         },
