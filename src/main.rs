@@ -6,6 +6,8 @@
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
+    // TODO: Add check if wlr-randr is available
+
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([400.0, 300.0])

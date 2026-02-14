@@ -44,17 +44,8 @@
           # LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
           packages = with pkgs; [
             clang
-            pango
             cairo
-            atkmm
-            gdk-pixbuf
-            xdotool
-            libayatana-appindicator
-            libappindicator-gtk3
-            libappindicator
             glib
-            gtk3
-            llvmPackages.bintools
             rustup
             libxkbcommon
             wayland
