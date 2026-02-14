@@ -3013,7 +3013,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "way_display"
+name = "way-display"
 version = "0.1.0"
 dependencies = [
  "eframe",

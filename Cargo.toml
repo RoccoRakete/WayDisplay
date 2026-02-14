@@ -1,5 +1,5 @@
 [package]
-name = "way_display"
+name = "way-display"
 version = "0.1.0"
 authors = []
 edition = "2024"
