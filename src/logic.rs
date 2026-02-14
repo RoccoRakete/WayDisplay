@@ -3,7 +3,6 @@ use crate::models::Monitor;
 use std::process::Command;
 
 impl WayDisplay {
-    /// Fetches the current monitor configuration using wlr-randr
     pub fn refresh_monitors(&mut self) {
         let output = Command::new("wlr-randr").arg("--json").output();
 
@@ -11,17 +10,21 @@ impl WayDisplay {
             Ok(out) => {
                 let json_string = String::from_utf8_lossy(&out.stdout);
                 match serde_json::from_str::<Vec<Monitor>>(&json_string) {
-                    Ok(data) => {
+                    Ok(mut data) => {
+                        let scale = 80.0 / 1920.0;
+                        for m in &mut data {
+                            m.visual_pos = egui::pos2(m.x as f32 * scale, m.y as f32 * scale);
+                        }
                         self.monitors = data;
                         self.error_msg = None;
                     }
                     Err(e) => {
-                        self.error_msg = Some(format!("Parse error: {e}"));
+                        self.error_msg = Some(format!("JSON Parse Error: {e}"));
                     }
                 }
             }
             Err(e) => {
-                self.error_msg = Some(format!("Failed to execute wlr-randr: {e}"));
+                self.error_msg = Some(format!("System Error: {e}"));
             }
         }
     }
@@ -30,21 +33,16 @@ impl WayDisplay {
         let (Some(m_idx), Some(mode_idx)) = (self.selected_idx, self.selected_mode_idx) else {
             return;
         };
-
         let Some(mode) = self.monitors.get(m_idx).and_then(|m| m.modes.get(mode_idx)) else {
             return;
         };
 
         let monitor = &self.monitors[m_idx];
-        let refresh_str = format!("{}", mode.refresh);
-        let mode_str = format!("{}x{}@{}", mode.width, mode.height, refresh_str);
+        let scale = mode.width as f32 / 80.0;
 
-        let ui_preview_width = 80.0;
-        let scale = mode.width as f32 / ui_preview_width;
-
+        // Find normalization point (top-left)
         let mut min_x = f32::MAX;
         let mut min_y = f32::MAX;
-
         for m in &self.monitors {
             if m.visual_pos.x < min_x {
                 min_x = m.visual_pos.x;
@@ -54,54 +52,44 @@ impl WayDisplay {
             }
         }
 
-        let physical_x = ((monitor.visual_pos.x - min_x) * scale).round() as i32;
-        let physical_y = ((monitor.visual_pos.y - min_y) * scale).round() as i32;
+        let px = ((monitor.visual_pos.x - min_x) * scale).round() as i32;
+        let py = ((monitor.visual_pos.y - min_y) * scale).round() as i32;
 
         let mut cmd = Command::new("wlr-randr");
         cmd.arg("--output").arg(&monitor.name);
 
         if self.monitor_enabled {
-            cmd.arg("--custom-mode").arg(mode_str);
-
-            cmd.arg("--pos")
-                .arg(format!("{},{}", physical_x, physical_y));
-
-            let sync_status = if self.adaptive_sync {
+            cmd.arg("--custom-mode")
+                .arg(format!("{}x{}@{}", mode.width, mode.height, mode.refresh));
+            cmd.arg("--pos").arg(format!("{},{}", px, py));
+            cmd.arg("--adaptive-sync").arg(if self.adaptive_sync {
                 "enabled"
             } else {
                 "disabled"
-            };
-            cmd.arg("--adaptive-sync").arg(sync_status);
+            });
         } else {
             cmd.arg("--off");
         }
 
-        let wlr_output = format!(
+        let cmd_full = format!(
             "{} {}",
             cmd.get_program().to_string_lossy(),
             cmd.get_args()
-                .map(|arg| arg.to_string_lossy())
+                .map(|a| a.to_string_lossy())
                 .collect::<Vec<_>>()
                 .join(" ")
         );
-        self.cmd_output = Some(wlr_output);
+        self.cmd_output = Some(cmd_full);
 
-        // Execute the command
         match cmd.output() {
             Ok(output) if output.status.success() => {
-                log::info!(
-                    "Settings applied to {}: Pos {},{}",
-                    monitor.name,
-                    physical_x,
-                    physical_y
-                );
+                self.error_msg = None;
             }
             Ok(output) => {
-                let err = String::from_utf8_lossy(&output.stderr);
-                self.error_msg = Some(format!("wlr-randr error: {err}"));
+                self.error_msg = Some(String::from_utf8_lossy(&output.stderr).to_string());
             }
             Err(e) => {
-                self.error_msg = Some(format!("Failed to run wlr-randr: {e}"));
+                self.error_msg = Some(e.to_string());
             }
         }
     }

@@ -167,22 +167,26 @@ impl WayDisplay {
                                 let res = ui.interact(monitor_rect, id, egui::Sense::drag());
 
                                 if res.dragged() {
+                                    // 1. Move the monitor
                                     self.monitors[i].visual_pos += res.drag_delta();
 
-                                    let half_width = rect.width() / 2.0;
-                                    let half_height = rect.height() / 2.0;
+                                    // 2. Define boundaries (The black box is 'rect')
+                                    let half_w = rect.width() / 2.0;
+                                    let half_h = rect.height() / 2.0;
 
+                                    // Margin (half of our 80x45 preview box)
                                     let margin_x = 40.0;
                                     let margin_y = 22.5;
 
+                                    // 3. Clamp visual_pos relative to the center of the box
                                     self.monitors[i].visual_pos.x = self.monitors[i]
                                         .visual_pos
                                         .x
-                                        .clamp(-half_width + margin_x, half_width - margin_x);
+                                        .clamp(-half_w + margin_x, half_w - margin_x);
                                     self.monitors[i].visual_pos.y = self.monitors[i]
                                         .visual_pos
                                         .y
-                                        .clamp(-half_height + margin_y, half_height - margin_y);
+                                        .clamp(-half_h + margin_y, half_h - margin_y);
 
                                     let snap_dist = 10.0;
                                     for j in 0..self.monitors.len() {
